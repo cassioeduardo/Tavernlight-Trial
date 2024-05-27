@@ -36,7 +36,9 @@ public:
     Thing();
     virtual ~Thing() { }
 
+    virtual void preDraw(const Point& dest, float scaleFactor, bool animate, LightView *lightView = nullptr) {}
     virtual void draw(const Point& /*dest*/, float /*scaleFactor*/, bool /*animate*/, LightView* /*lightView*/ = nullptr) { }
+    virtual void postDraw() {}
 
     virtual void setId(uint32 /*id*/) { }
     void setPosition(const Position& position);

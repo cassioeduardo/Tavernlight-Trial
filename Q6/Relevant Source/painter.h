@@ -27,6 +27,7 @@
 #include <framework/graphics/coordsbuffer.h>
 #include <framework/graphics/paintershaderprogram.h>
 #include <framework/graphics/texture.h>
+#include <framework/graphics/brushconfiguration.h>
 
 class Painter
 {
@@ -47,7 +48,11 @@ public:
         Triangles = GL_TRIANGLES,
         TriangleStrip = GL_TRIANGLE_STRIP
     };
-
+    enum PaintType {
+        PaintType_Textured,
+        PaintType_SolidColor,
+        PaintType_Creature,
+    };
 
     Painter();
     virtual ~Painter() { }
@@ -79,6 +84,11 @@ public:
     virtual void setBlendEquation(BlendEquation blendEquation) = 0;
     virtual void setShaderProgram(PainterShaderProgram *shaderProgram) { m_shaderProgram = shaderProgram; }
     void setShaderProgram(const PainterShaderProgramPtr& shaderProgram) { setShaderProgram(shaderProgram.get()); }
+
+    // functions for dealing with paint (agnostic shaders) and brushes
+    virtual void applyPaintType(PaintType paintType) { }
+    virtual void setBrushConfiguration(const BrushConfiguration& brushConfiguration) { }
+    virtual void flushBrushConfigurations(PaintType paintType) { };
 
     virtual void scale(float x, float y) = 0;
     void scale(float factor) { scale(factor, factor); }
@@ -117,6 +127,9 @@ protected:
     Size m_resolution;
     float m_opacity;
     Rect m_clipRect;
+
+    PaintType m_paintType;
+    std::vector<BrushConfiguration> m_brushConfigurationVector;
 };
 
 extern Painter *g_painter;

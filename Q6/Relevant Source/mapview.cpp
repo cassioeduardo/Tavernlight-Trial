@@ -127,30 +127,96 @@ void MapView::draw(const Rect& rect)
         }
         g_painter->setColor(Color::white);
 
-        auto it = m_cachedVisibleTiles.begin();
-        auto end = m_cachedVisibleTiles.end();
-        for(int z=m_cachedLastVisibleFloor;z>=m_cachedFirstVisibleFloor;--z) {
+        // divided the rendering in three phases: pre, draw and post
+        // good collecting and processing data before rendering the floor
+        // prepare data for drawing
+        {
+            auto it = m_cachedVisibleTiles.begin();
+            auto end = m_cachedVisibleTiles.end();
+            for(int z = m_cachedLastVisibleFloor; z>=m_cachedFirstVisibleFloor; --z) {
 
-            while(it != end) {
-                const TilePtr& tile = *it;
-                Position tilePos = tile->getPosition();
-                if(tilePos.z != z)
-                    break;
-                else
-                    ++it;
+                while(it != end) {
+                    const TilePtr& tile = *it;
+                    Position tilePos = tile->getPosition();
+                    if(tilePos.z != z)
+                        break;
+                    else
+                        ++it;
 
-                if (g_map.isCovered(tilePos, m_cachedFirstVisibleFloor))
-                    tile->draw(transformPositionTo2D(tilePos, cameraPosition), scaleFactor, drawFlags);
-                else
-                    tile->draw(transformPositionTo2D(tilePos, cameraPosition), scaleFactor, drawFlags, m_lightView.get());
-            }
+                    std::vector<CreaturePtr> creatures = tile->getCreatures();
 
-            if(drawFlags & Otc::DrawMissiles) {
-                for(const MissilePtr& missile : g_map.getFloorMissiles(z)) {
-                    missile->draw(transformPositionTo2D(missile->getPosition(), cameraPosition), scaleFactor, drawFlags & Otc::DrawAnimations, m_lightView.get());
+                    for(const CreaturePtr creature : creatures) {
+                        creature->preDraw(transformPositionTo2D(tilePos, cameraPosition), scaleFactor, drawFlags, m_lightView.get());
+
+                        // gather information on creatues that have local effects
+                        for(const auto& afterimage : creature->getAfterimages())
+                        {
+                            TilePtr afterimageTile = g_map.getTile(afterimage.m_position);
+
+                            // temporally stores inside a map (using the afterimageTile address as a key)
+                            m_localEffects[(uintptr_t)afterimageTile.get()].push_back(LocalEffect(LocalEffect::LocalEffectType_Afterimage, creature->static_self_cast<Thing>(), afterimage));
+                        }
+                    }
                 }
             }
         }
+
+        // draw
+        {
+            auto it = m_cachedVisibleTiles.begin();
+            auto end = m_cachedVisibleTiles.end();
+            for(int z = m_cachedLastVisibleFloor; z>=m_cachedFirstVisibleFloor; --z) {
+                while(it != end) {
+                    const TilePtr& tile = *it;
+                    Position tilePos = tile->getPosition();
+                    if(tilePos.z != z)
+                        break;
+                    else
+                        ++it;
+
+                    std::vector<LocalEffect> localEffects = m_localEffects[(uintptr_t)tile.get()];
+
+                    if(g_map.isCovered(tilePos, m_cachedFirstVisibleFloor))
+                        tile->draw(transformPositionTo2D(tilePos, cameraPosition), scaleFactor, drawFlags, localEffects);
+                    else
+                        tile->draw(transformPositionTo2D(tilePos, cameraPosition), scaleFactor, drawFlags, localEffects, m_lightView.get());
+                }
+
+                if(drawFlags & Otc::DrawMissiles) {
+                    for(const MissilePtr& missile : g_map.getFloorMissiles(z)) {
+                        missile->draw(transformPositionTo2D(missile->getPosition(), cameraPosition), scaleFactor, drawFlags & Otc::DrawAnimations, m_lightView.get());
+                    }
+                }
+            }
+        }
+
+        // cleanup
+        {
+            auto it = m_cachedVisibleTiles.begin();
+            auto end = m_cachedVisibleTiles.end();
+            for(int z = m_cachedLastVisibleFloor; z>=m_cachedFirstVisibleFloor; --z) {
+
+                while(it != end) {
+                    const TilePtr& tile = *it;
+                    Position tilePos = tile->getPosition();
+                    if(tilePos.z != z)
+                        break;
+                    else
+                        ++it;
+
+                    std::vector<CreaturePtr> creatures = tile->getCreatures();
+
+                    // calls the post draw function of every creature
+                    for(const CreaturePtr creature : creatures) {
+                        if(creature->hasAfterimages()) {
+                            creature->postDraw();
+                        }
+                    }
+                }
+            }
+        }
+
+        m_localEffects.clear(); // clear the data before entering the 
 
         m_framebuffer->release();
 

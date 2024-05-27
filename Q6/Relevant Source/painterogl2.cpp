@@ -43,6 +43,15 @@ PainterOGL2::PainterOGL2()
     m_drawSolidColorProgram->addShaderFromSourceCode(Shader::Fragment, glslMainFragmentShader + glslSolidColorFragmentShader);
     m_drawSolidColorProgram->link();
 
+    m_drawCreatureProgram = PainterShaderProgramPtr(new PainterShaderProgram);
+    assert(m_drawCreatureProgram);
+    m_drawCreatureProgram->addShaderFromSourceCode(Shader::Vertex, glslMainWithTexCoordsVertexShader + glslPositionOnlyVertexShader);
+    m_drawCreatureProgram->addShaderFromSourceCode(Shader::Fragment, glslMainFragmentShader + glslCreatureSrcFragmentShader);
+    m_drawCreatureProgram->link();
+
+    m_drawCreatureProgram->bind();
+    m_drawCreatureProgram->setUniformValue("u_IsDashing", 0);
+
     PainterShaderProgram::release();
 }
 
@@ -210,4 +219,71 @@ void PainterOGL2::drawBoundingRect(const Rect& dest, int innerLineWidth)
     m_coordsBuffer.clear();
     m_coordsBuffer.addBoudingRect(dest, innerLineWidth);
     drawCoords(m_coordsBuffer);
+}
+
+void PainterOGL2::applyPaintType(PaintType paintType)
+{
+    if(paintType == PaintType_Textured)
+    {
+        setShaderProgram(m_drawTexturedProgram.get());
+    }
+    else if(paintType == PaintType_SolidColor)
+    {
+        setShaderProgram(m_drawSolidColorProgram.get());
+    }
+    else if(paintType == PaintType_Creature)
+    {
+        setShaderProgram(m_drawCreatureProgram.get());
+    }
+}
+
+void PainterOGL2::setBrushConfiguration(const BrushConfiguration& brushConfiguration)
+{
+    m_brushConfigurationVector.push_back(brushConfiguration);
+}
+
+//Specific implementation for Opengl2, which just uses the brushes to set uniforms directly.
+void PainterOGL2::flushBrushConfigurations(PaintType paintType)
+{
+    PainterShaderProgram* painterShaderProgram = nullptr;
+
+    if(paintType == PaintType_Textured)
+        painterShaderProgram = m_drawTexturedProgram.get();
+    else if(paintType == PaintType_SolidColor)
+        painterShaderProgram = m_drawSolidColorProgram.get();
+    else if(paintType == PaintType_Creature)
+        painterShaderProgram = m_drawCreatureProgram.get();
+
+    if(painterShaderProgram == nullptr) {
+        m_brushConfigurationVector.clear();
+
+        return;
+    }
+
+    // set uniforms
+    painterShaderProgram->bind();
+    for(auto& brushConfiguration : m_brushConfigurationVector) {
+        switch(brushConfiguration.getType()) {
+            case BrushConfiguration::Type_Int32: {
+                painterShaderProgram->setUniformValue(brushConfiguration.getLocation(), brushConfiguration.getInt32Value());
+                break;
+            }
+            case BrushConfiguration::Type_Float: {
+                painterShaderProgram->setUniformValue(brushConfiguration.getLocation(), brushConfiguration.getFloatValue());
+                break;
+            }
+            case BrushConfiguration::Type_Vector2: {
+                PointF value = brushConfiguration.getVector2Value();
+
+                painterShaderProgram->setUniformValue(brushConfiguration.getLocation(), value.x, value.y);
+                break;
+            }
+            case BrushConfiguration::Type_Color: {
+                painterShaderProgram->setUniformValue(brushConfiguration.getLocation(), brushConfiguration.getColorValue());
+                break;
+            }
+        }
+    }
+
+    m_brushConfigurationVector.clear();
 }

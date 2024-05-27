@@ -1,0 +1,9 @@
+Module
+  name: client_opcodehandler
+  description: Processess signals from the server.
+  author: Cássio Eduardo Ferreira da Cunha
+  website: www.site.com
+  sandboxed: true
+  scripts: [ opcodehandler.lua ]
+  @onLoad: init()
+  @onUnload: terminate()

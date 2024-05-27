@@ -39,7 +39,7 @@ Tile::Tile(const Position& position) :
 {
 }
 
-void Tile::draw(const Point& dest, float scaleFactor, int drawFlags, LightView *lightView)
+void Tile::draw(const Point& dest, float scaleFactor, int drawFlags, std::vector<LocalEffect> localEffects, LightView *lightView)
 {
     bool animate = drawFlags & Otc::DrawAnimations;
 
@@ -104,6 +104,16 @@ void Tile::draw(const Point& dest, float scaleFactor, int drawFlags, LightView *
             m_drawElevation += thing->getElevation();
             if(m_drawElevation > Otc::MAX_ELEVATION)
                 m_drawElevation = Otc::MAX_ELEVATION;
+        }
+    }
+
+    // local effect
+    for(const LocalEffect& localEffect : localEffects) {
+        if(localEffect.m_type == LocalEffect::LocalEffectType_Afterimage) {
+            CreaturePtr creature = localEffect.m_thing->static_self_cast<Creature>();
+
+            creature->drawAfterimage(Point(dest.x + localEffect.m_data.afterimage.m_offset.x + ((localEffect.m_data.afterimage.m_position.x - m_position.x)*Otc::TILE_PIXELS - m_drawElevation)*scaleFactor,
+                                           dest.y + localEffect.m_data.afterimage.m_offset.y + ((localEffect.m_data.afterimage.m_position.y - m_position.y)*Otc::TILE_PIXELS - m_drawElevation)*scaleFactor), scaleFactor, localEffect.m_data.afterimage);
         }
     }
 

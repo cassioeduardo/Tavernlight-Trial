@@ -30,6 +30,7 @@
 #include "effect.h"
 #include "luavaluecasts.h"
 #include "lightview.h"
+#include "uimap.h"
 
 #include <framework/graphics/graphics.h>
 #include <framework/core/eventdispatcher.h>
@@ -39,6 +40,7 @@
 #include <framework/graphics/ogl/painterogl2_shadersources.h>
 #include <framework/graphics/texturemanager.h>
 #include <framework/graphics/framebuffermanager.h>
+#include <framework/ui/uimanager.h>
 #include "spritemanager.h"
 
 Creature::Creature() : Thing()
@@ -61,6 +63,57 @@ Creature::Creature() : Thing()
     m_footStep = 0;
     m_speedFormula.fill(-1);
     m_outfitColor = Color::white;
+
+    // setup spell related variables
+    // dash
+    m_isDashing = false;
+    m_afterimagesClearTimer = Timer();
+}
+
+// "preDaw" is called before looping through all creatures
+void Creature::preDraw(const Point& dest, float scaleFactor, bool animate, LightView *lightView)
+{
+    // outfit is a real creature
+    if(m_outfit.getCategory() == ThingCategoryCreature) {
+        int animationPhase = 0;
+
+        // xPattern => creature direction
+        int xPattern;
+        if(m_direction == Otc::NorthEast || m_direction == Otc::SouthEast)
+            xPattern = Otc::East;
+        else if(m_direction == Otc::NorthWest || m_direction == Otc::SouthWest)
+            xPattern = Otc::West;
+        else
+            xPattern = m_direction;
+
+        int zPattern = 0;
+        if(m_outfit.getMount() != 0) {
+            zPattern = std::min<int>(1, getNumPatternZ() - 1);
+        }
+
+        // yPattern => creature addon
+        for(int yPattern = 0; yPattern < getNumPatternY(); yPattern++) {
+
+            // continue if we dont have this addon
+            if(yPattern > 0 && !(m_outfit.getAddons() & (1 << (yPattern-1))))
+                continue;
+
+            // checks if the creature has moved
+            if(m_position != m_lastPosition) {
+                if(m_isDashing) {
+                    Point direction = Point(m_lastPosition.x, m_lastPosition.y) - Point(m_position.x, m_position.y); // gets the direction of the last position 
+                    Point offset = Point(direction.x*(Otc::TILE_PIXELS/2), direction.y*(Otc::TILE_PIXELS/2)); // turns the direction into an offset (in screen coordinates)
+
+                    // create the actual after images and store them
+                    m_afterimages.push_back(LocalEffect::Afterimage(m_position, offset, xPattern, zPattern, animationPhase, 400.0f));
+                    m_afterimages.push_back(LocalEffect::Afterimage(m_lastPosition, Point(0, 0), xPattern, zPattern, animationPhase, 350.0f));
+                }
+
+                // update last position
+                m_lastPosition = m_position;
+            }
+        }
+    }
 }
 
 void Creature::draw(const Point& dest, float scaleFactor, bool animate, LightView *lightView)
@@ -104,7 +157,9 @@ void Creature::draw(const Point& dest, float scaleFactor, bool animate, LightVie
 
 void Creature::internalDrawOutfit(Point dest, float scaleFactor, bool animateWalk, bool animateIdle, Otc::Direction direction, LightView *lightView)
 {
+    g_painter->saveState();
     g_painter->setColor(m_outfitColor);
+    g_painter->applyPaintType(Painter::PaintType_Creature);
 
     // outfit is a real creature
     if(m_outfit.getCategory() == ThingCategoryCreature) {
@@ -144,6 +199,20 @@ void Creature::internalDrawOutfit(Point dest, float scaleFactor, bool animateWal
                 continue;
 
             auto datType = rawGetThingType();
+
+            // if dashing, draws an outline
+            if(isDashing()) {
+                // set dashing to true and flush (send to GPU)
+                g_painter->setBrushConfiguration(BrushConfiguration("u_IsDashing", 1));
+                g_painter->flushBrushConfigurations(Painter::PaintType_Creature);
+
+                datType->draw(dest, scaleFactor, 0, xPattern, yPattern, zPattern, animationPhase, yPattern == 0 ? lightView : nullptr);
+
+                // set dashing to false again after drawing the outline is done
+                g_painter->setBrushConfiguration(BrushConfiguration("u_IsDashing", 0));
+                g_painter->flushBrushConfigurations(Painter::PaintType_Creature);
+            }
+
             datType->draw(dest, scaleFactor, 0, xPattern, yPattern, zPattern, animationPhase, yPattern == 0 ? lightView : nullptr);
 
             if(getLayers() > 1) {
@@ -191,6 +260,19 @@ void Creature::internalDrawOutfit(Point dest, float scaleFactor, bool animateWal
     }
 
     g_painter->resetColor();
+    g_painter->restoreSavedState();
+}
+
+// postDraw is used for cleanup after the render is complete
+void Creature::postDraw()
+{
+    // clear expired afterimages
+    if(m_afterimagesClearTimer.ticksElapsed() >= 1000.0f/30.0f)
+    {
+        m_afterimages.erase(std::remove_if(m_afterimages.begin(), m_afterimages.end(), [](LocalEffect::Afterimage afterimage) -> bool { return afterimage.m_timer.ticksElapsed() >= afterimage.m_duration; }), m_afterimages.end());
+
+        m_afterimagesClearTimer.restart();
+    }
 }
 
 void Creature::drawOutfit(const Rect& destRect, bool resize)
@@ -221,6 +303,55 @@ void Creature::drawOutfit(const Rect& destRect, bool resize)
         Point dest = destRect.bottomRight() - (Point(Otc::TILE_PIXELS,Otc::TILE_PIXELS) - getDisplacement()) * scaleFactor;
         internalDrawOutfit(dest, scaleFactor, false, true, Otc::South);
     }
+}
+
+void Creature::drawAfterimage(Point& dest, float scaleFactor, LocalEffect::Afterimage afterimage)
+{
+    g_painter->setColor(m_outfitColor);
+
+    // outfit is a real creature
+    if(m_outfit.getCategory() == ThingCategoryCreature) {
+        PointF jumpOffset = m_jumpOffset * scaleFactor;
+        dest -= Point(stdext::round(jumpOffset.x), stdext::round(jumpOffset.y));
+
+        // yPattern => creature addon
+        for(int yPattern = 0; yPattern < getNumPatternY(); yPattern++) {
+
+            // continue if we dont have this addon
+            if(yPattern > 0 && !(m_outfit.getAddons() & (1 << (yPattern-1))))
+                continue;
+
+            // stores current opacity to restore it later on
+            float oldOpacity = g_painter->getOpacity();
+
+            g_painter->setOpacity(1 - max(afterimage.m_timer.ticksElapsed()/afterimage.m_duration, 0.0f));
+
+            // draw the afterimage semi-transparently
+            auto datType = rawGetThingType();
+            datType->draw(dest, scaleFactor, 0, afterimage.m_xPattern, yPattern, afterimage.m_zPattern, afterimage.m_animationPhase, nullptr);
+
+            // draws the colors for the afterimage
+            g_painter->setOpacity(oldOpacity);
+
+            if(getLayers() > 1) {
+                Color oldColor = g_painter->getColor();
+                Painter::CompositionMode oldComposition = g_painter->getCompositionMode();
+                g_painter->setCompositionMode(Painter::CompositionMode_Multiply);
+                g_painter->setColor(m_outfit.getHeadColor());
+                datType->draw(dest, scaleFactor, SpriteMaskYellow, afterimage.m_xPattern, yPattern, afterimage.m_zPattern, afterimage.m_animationPhase);
+                g_painter->setColor(m_outfit.getBodyColor());
+                datType->draw(dest, scaleFactor, SpriteMaskRed, afterimage.m_xPattern, yPattern, afterimage.m_zPattern, afterimage.m_animationPhase);
+                g_painter->setColor(m_outfit.getLegsColor());
+                datType->draw(dest, scaleFactor, SpriteMaskGreen, afterimage.m_xPattern, yPattern, afterimage.m_zPattern, afterimage.m_animationPhase);
+                g_painter->setColor(m_outfit.getFeetColor());
+                datType->draw(dest, scaleFactor, SpriteMaskBlue, afterimage.m_xPattern, yPattern, afterimage.m_zPattern, afterimage.m_animationPhase);
+                g_painter->setColor(oldColor);
+                g_painter->setCompositionMode(oldComposition);
+            }
+        }
+    }
+
+    g_painter->resetColor();
 }
 
 void Creature::drawInformation(const Point& point, bool useGray, const Rect& parentRect, int drawFlags)

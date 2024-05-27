@@ -29,6 +29,7 @@
 #include <framework/luaengine/luaobject.h>
 #include <framework/core/declarations.h>
 #include "lightview.h"
+#include "localeffect.h"
 
 // @bindclass
 class MapView : public LuaObject
@@ -175,6 +176,8 @@ private:
     float m_fadeInTime;
     float m_fadeOutTime;
     stdext::boolean<true> m_shaderSwitchDone;
+
+    std::map<uintptr_t, std::vector<LocalEffect>> m_localEffects;
 };
 
 #endif

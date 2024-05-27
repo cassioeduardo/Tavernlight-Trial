@@ -27,6 +27,7 @@
 #include "outfit.h"
 #include "tile.h"
 #include "mapview.h"
+#include "localeffect.h"
 #include <framework/core/scheduledevent.h>
 #include <framework/core/declarations.h>
 #include <framework/core/timer.h>
@@ -44,10 +45,13 @@ public:
 
     Creature();
 
+    virtual void preDraw(const Point& dest, float scaleFactor, bool animate, LightView *lightView);
     virtual void draw(const Point& dest, float scaleFactor, bool animate, LightView *lightView = nullptr);
+    virtual void postDraw();
 
     void internalDrawOutfit(Point dest, float scaleFactor, bool animateWalk, bool animateIdle, Otc::Direction direction, LightView *lightView = nullptr);
     void drawOutfit(const Rect& destRect, bool resize);
+    void drawAfterimage(Point& dest, float scaleFactor, LocalEffect::Afterimage afterimage);
     void drawInformation(const Point& point, bool useGray, const Rect& parentRect, int drawFlags);
 
     void setId(uint32 id) { m_id = id; }
@@ -124,6 +128,12 @@ public:
     bool isDead() { return m_healthPercent <= 0; }
     bool canBeSeen() { return !isInvisible() || isPlayer(); }
 
+    void startDash() { m_isDashing = true; }
+    void endDash() { m_isDashing = false; }
+    bool isDashing() { return m_isDashing; }
+    bool hasAfterimages() { return m_afterimages.size() > 0; }
+    std::vector<LocalEffect::Afterimage> getAfterimages() { return m_afterimages; };
+
     bool isCreature() { return true; }
 
     const ThingTypePtr& getThingType();
@@ -199,11 +209,19 @@ protected:
     Position m_lastStepToPosition;
     Position m_oldPosition;
 
+    Position m_lastPosition;
+
     // jump related
     float m_jumpHeight;
     float m_jumpDuration;
     PointF m_jumpOffset;
     Timer m_jumpTimer;
+
+    // spell related
+    // dash
+    bool m_isDashing;
+    std::vector<LocalEffect::Afterimage> m_afterimages;
+    Timer m_afterimagesClearTimer;
 };
 
 // @bindclass

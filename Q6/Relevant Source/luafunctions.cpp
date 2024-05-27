@@ -474,6 +474,12 @@ void Client::registerLuaFunctions()
     g_lua.bindClassMemberFunction<Creature>("setIconTexture", &Creature::setIconTexture);
     g_lua.bindClassMemberFunction<Creature>("showStaticSquare", &Creature::showStaticSquare);
     g_lua.bindClassMemberFunction<Creature>("hideStaticSquare", &Creature::hideStaticSquare);
+
+    // functions to control dash behaviour
+    g_lua.bindClassMemberFunction<Creature>("startDash", &Creature::startDash);
+    g_lua.bindClassMemberFunction<Creature>("endDash", &Creature::endDash);
+    g_lua.bindClassMemberFunction<Creature>("isDashing", &Creature::isDashing);
+
     g_lua.bindClassMemberFunction<Creature>("isWalking", &Creature::isWalking);
     g_lua.bindClassMemberFunction<Creature>("isInvisible", &Creature::isInvisible);
     g_lua.bindClassMemberFunction<Creature>("isDead", &Creature::isDead);

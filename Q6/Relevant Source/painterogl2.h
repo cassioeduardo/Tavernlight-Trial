@@ -52,12 +52,19 @@ public:
 
     void setDrawProgram(PainterShaderProgram *drawProgram) { m_drawProgram = drawProgram; }
 
+    void applyPaintType(PaintType paintType);
+    void setBrushConfiguration(const BrushConfiguration& brushConfiguration);
+    void flushBrushConfigurations(PaintType paintType);
+
     bool hasShaders() { return true; }
 
 private:
     PainterShaderProgram *m_drawProgram;
+
     PainterShaderProgramPtr m_drawTexturedProgram;
     PainterShaderProgramPtr m_drawSolidColorProgram;
+
+    PainterShaderProgramPtr m_drawCreatureProgram;
 };
 
 extern PainterOGL2 *g_painterOGL2;

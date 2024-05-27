@@ -71,4 +71,30 @@ static const std::string glslSolidColorFragmentShader = "\n\
         return u_Color;\n\
     }\n";
 
+// the uniform "u_IsDashing" must be set to 1 for the outline to appear
+// to draw the outline, I accumulate the alpha all adjacent pixels (using the appropriate texel size) and set to red if there is at least one non-alpha pixel
+static const std::string glslCreatureSrcFragmentShader = "\n\
+    varying mediump vec2 v_TexCoord;\n\
+    uniform lowp vec4 u_Color;\n\
+    uniform sampler2D u_Tex0;\n\
+    uniform int u_IsDashing;\n\
+    lowp vec4 calculatePixel() {\n\
+        if(u_IsDashing == 0) {\n\
+            return texture2D(u_Tex0, v_TexCoord) * u_Color;\n\
+        }\n\
+        else {\n\
+            ivec2 textureSize = textureSize(u_Tex0, 0);\n\
+            vec2 texelSize = vec2(1.0/float(textureSize.x), 1.0/float(textureSize.y));\n\
+            float alpha = 0.0;\n\
+            alpha = max(alpha, texture2D(u_Tex0, v_TexCoord + vec2(-texelSize.x, 0.0)).a);\n\
+            alpha = max(alpha, texture2D(u_Tex0, v_TexCoord + vec2(texelSize.x, 0.0)).a);\n\
+            alpha = max(alpha, texture2D(u_Tex0, v_TexCoord + vec2(0.0, -texelSize.y)).a);\n\
+            alpha = max(alpha, texture2D(u_Tex0, v_TexCoord + vec2(0.0, texelSize.y)).a);\n\
+            if(alpha == 0.0)\n\
+                return vec4(0.0, 0.0, 0.0, 0.0);\n\
+            else\n\
+                return vec4(1.0, 0.0, 0.0, 1.0);\n\
+        }\n\
+    }\n";
+
 #endif

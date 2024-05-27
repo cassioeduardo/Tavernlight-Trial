@@ -62,7 +62,7 @@ public:
 
     Tile(const Position& position);
 
-    void draw(const Point& dest, float scaleFactor, int drawFlags, LightView *lightView = nullptr);
+    void draw(const Point& dest, float scaleFactor, int drawFlags, std::vector<LocalEffect> localEffects, LightView *lightView = nullptr);
 
 public:
     void clean();
