@@ -1,0 +1,9 @@
+Module
+  name: client_jumpmenu
+  description: Makes the button jump.
+  author: Cássio Eduardo Ferreira da Cunha
+  website: www.site.com
+  sandboxed: true
+  scripts: [ jumpmenu.lua ]
+  @onLoad: init()
+  @onUnload: terminate()

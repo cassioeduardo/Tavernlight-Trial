@@ -1,0 +1,14 @@
+MainWindow
+  id: jumpMenu
+  !text: tr('Window')
+  size: 300 300
+
+  @onEnter: hide()
+  @onEscape: hide()
+
+  Button
+    id: jumpButton
+    !text: tr('Jump')
+    size: 80 25
+
+    @onClick: jump()
